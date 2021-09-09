@@ -78,6 +78,4 @@ fn main() {
     let r1 = e.clone();
     let r2 = Rc::clone(&e);
     let b = Rc::downgrade(&e);
-    b.test();
-    b.data = ();
 }
