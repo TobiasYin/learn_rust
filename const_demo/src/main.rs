@@ -1,8 +1,6 @@
 #![feature(const_for)]
 #![feature(const_mut_refs)]
 
-use std::vec;
-
 #[inline(never)]
 const fn f1(i: i32) -> i32 {
     1 + 3 * i
