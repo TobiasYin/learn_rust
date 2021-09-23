@@ -13,29 +13,12 @@ extern crate lazy_static;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:8081").unwrap();
-    // loop {
-    //     match listener.accept(){
-    //         Ok((mut conn, addr)) => {
-    //             println!("connect: {}", addr);
-    //             conn.set_read_timeout(Some(Duration::from_millis(100)));
-    //             let mut data = String::new();
-    //             conn.read_to_string(&mut data);
-    //             println!("req: {}", data);
-    //             conn.write("HTTP/1.1 200 OK\r\n\r\nhello world".as_bytes());
-    //         }
-    //         Err(err) => panic!("{}", err)
-    //     };
-    // }
+
     for stream in listener.incoming() {
         let mut stream = stream.unwrap();
         thread::spawn(move ||{
             handle_connection(stream);
         });
-        // stream.set_read_timeout(Some(Duration::from_millis(100)));
-        // let mut data = String::new();
-        // stream.read_to_string(&mut data);
-        // println!("req: {}", data);
-        // stream.write("HTTP/1.1 404 OK\r\n\r\nhello world".as_bytes());
     }
 }
 
