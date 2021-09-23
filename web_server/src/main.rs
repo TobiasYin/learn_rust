@@ -1,10 +1,8 @@
 use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write, BufReader, self};
+use std::io::{Read, Write, self};
 use std::time::Duration;
 use std::collections::HashMap;
 use std::error::Error;
-use std::ops::AddAssign;
-use std::panic::resume_unwind;
 use std::thread;
 
 #[macro_use]
@@ -15,7 +13,7 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:8081").unwrap();
 
     for stream in listener.incoming() {
-        let mut stream = stream.unwrap();
+        let stream = stream.unwrap();
         thread::spawn(move ||{
             handle_connection(stream);
         });
@@ -102,7 +100,7 @@ impl<'a, T: Read> BufferReader<'a, T> {
     pub fn read_size(&mut self, size: usize) -> io::Result<Vec<u8>> {
         let mut left = self.buf.len() - self.pos;
         while left < size {
-            self.inner_read_with_size(left);
+            self.inner_read_with_size(left)?;
             left = self.buf.len() - self.pos;
         }
 
@@ -201,7 +199,7 @@ fn read_request(conn: &mut TcpStream) -> Res<Request> {
     buf_reader.set_line_sep("\r\n");
 
     unsafe {
-        (*pointer).set_read_timeout(None);
+        (*pointer).set_read_timeout(None)?;
     }
 
 
@@ -209,7 +207,7 @@ fn read_request(conn: &mut TcpStream) -> Res<Request> {
 
     // 第一条阻塞读，用于等待请求到来
     unsafe {
-        (*pointer).set_read_timeout(Some(Duration::from_secs(10)));
+        (*pointer).set_read_timeout(Some(Duration::from_secs(10)))?;
     }
     let items: Vec<&str> = first_line.split(" ").collect();
     if items.len() != 3 {
@@ -224,7 +222,7 @@ fn read_request(conn: &mut TcpStream) -> Res<Request> {
         let (k, v) = line.split_once(":").unwrap_or_else(|| (&line, ""));
         let k = k.trim();
         let v = v.trim();
-        handle_special_header(&mut req, k, v);
+        handle_special_header(&mut req, k, v)?;
         req.headers.insert(String::from(k), String::from(v));
         line = buf_reader.read_line()?;
     }
@@ -253,13 +251,16 @@ fn handle_special_header(req: &mut Request, k: &str, v: &str) -> Res<()> {
 fn handle_connection(mut conn: TcpStream) {
     println!("connect: {}", conn.peer_addr().unwrap());
     loop {
-        let mut req = read_request(&mut conn);
+        let req = read_request(&mut conn);
         let (method, uri) = if let Ok(req) = &req { (&req.method[..], &req.uri[..]) } else { ("unknown", "unknown") };
         println!("new request: {} {}", method, uri);
         let keep_alive = if let Ok(req) = &req {
             req.keep_alive
         } else { false };
-        handle_request(&mut conn, req);
+        if let Err(e) = handle_request(&mut conn, req){
+            println!("error on handle request: {}", e);
+            break;
+        }
         if !keep_alive {
             break;
         }
@@ -267,7 +268,7 @@ fn handle_connection(mut conn: TcpStream) {
     println!("disconnect: {}", conn.peer_addr().unwrap());
 }
 
-fn handle_request(mut conn: &mut TcpStream, mut req: Res<Request>) {
+fn handle_request(mut conn: &mut TcpStream, req: Res<Request>) -> Res<()> {
     let resp = match req {
         Ok(mut req) => {
             let ret = BaseHandler::handle(&mut req);
@@ -289,14 +290,16 @@ fn handle_request(mut conn: &mut TcpStream, mut req: Res<Request>) {
         }
     };
 
-    write_response(&mut conn, &resp);
+    write_response(&mut conn, &resp)?;
+
+    Ok(())
 }
 
 fn error_response_for_request(req: &mut Request, err: Box<dyn Error>) {
     if let None = req.response {
         req.response = Some(Response::new());
     }
-    let mut resp = req.response.as_mut().unwrap();
+    let resp = req.response.as_mut().unwrap();
     error_response(resp, err);
 }
 
