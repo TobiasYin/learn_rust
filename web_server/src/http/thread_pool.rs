@@ -61,7 +61,6 @@ pub struct Pool<T: Bound<R>, R: Ret> {
 
 impl<T: Bound<R>, R: Ret> Pool<T, R> {
     pub fn new(size: usize) -> Self {
-        let (s, r) = channel();
         let mut s = Pool {
             pool_size: size,
             max_pool_size: size * 3,
