@@ -1,5 +1,4 @@
 use std::net::TcpListener;
-use std::thread;
 use crate::http::handler::Handler;
 use crate::http::core::handle_connection;
 use std::process::exit;

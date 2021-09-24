@@ -12,7 +12,6 @@ use std::{
     thread,
 };
 use std::sync::{Mutex, Arc};
-use std::thread::JoinHandle;
 use std::error::Error;
 
 pub trait Ret: Send + 'static {}
@@ -44,10 +43,11 @@ impl<T: Bound<R>, R: Ret> Chan<T, R> {
     }
 }
 
-struct ptr<T: Bound<R>, R: Ret>(*mut Pool<T, R>);
+struct Ptr<T: Bound<R>, R: Ret>(*mut Pool<T, R>);
 
-unsafe impl<T: Bound<R>, R: Ret> Send for ptr<T, R> {}
+unsafe impl<T: Bound<R>, R: Ret> Send for Ptr<T, R> {}
 
+#[allow(dead_code)]
 pub struct Pool<T: Bound<R>, R: Ret> {
     pool_size: usize,
     max_pool_size: usize, // TODO
@@ -56,7 +56,7 @@ pub struct Pool<T: Bound<R>, R: Ret> {
     channels: HashMap<usize, Chan<T, R>>,
     running: HashSet<usize>,
     waits: VecDeque<usize>,
-    mutex: Option<Arc<Mutex<ptr<T, R>>>>,
+    mutex: Option<Arc<Mutex<Ptr<T, R>>>>,
 }
 
 impl<T: Bound<R>, R: Ret> Pool<T, R> {
@@ -71,7 +71,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
             waits: Default::default(),
             mutex: None,
         };
-        s.mutex = Some(Arc::new(Mutex::new(ptr(&mut s as *mut Self))));
+        s.mutex = Some(Arc::new(Mutex::new(Ptr(&mut s as *mut Self))));
 
         for i in 0..size {
             s.new_thread(i);
@@ -81,13 +81,14 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
         s
     }
 
-    fn borrow_ref_from_arc<F: FnOnce(&mut Pool<T, R>)>(this: &Arc<Mutex<ptr<T, R>>>, f: F) {
+    fn borrow_ref_from_arc<F: FnOnce(&mut Pool<T, R>)>(this: &Arc<Mutex<Ptr<T, R>>>, f: F) {
         unsafe {
             let pool = this.lock().unwrap();
             f(pool.0.as_mut().unwrap());
         }
     }
 
+    #[allow(unused_must_use)]
     pub fn add_job(&mut self, job: T) -> usize  {
         let id = self.poll_thread();
         println!("new job, thread: {}", id);
@@ -102,6 +103,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
         id
     }
 
+    #[allow(dead_code)]
     pub fn wait_res(&mut self, id: usize) -> Result<R, Box<dyn Error>> {
         if !self.running.contains(&id) {
             Err("not found".into())
@@ -153,7 +155,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
                     this.return_thread(id);
                 });
 
-                if let Err(e) = chan.send.send(Signal::Return(res)) {
+                if let Err(_) = chan.send.send(Signal::Return(res)) {
                     break;
                 }
             }
