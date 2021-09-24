@@ -70,6 +70,10 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
             mutex: None,
         };
         s.mutex = Some(Arc::new(Mutex::new(ptr(&mut s as *mut Self))));
+        for i in 0..size {
+            s.new_thread(i);
+            s.waits.push_back(i)
+        }
         s
     }
 
@@ -143,8 +147,8 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
                     this.return_thread(id);
                 });
 
-                if let Err(e) = chan.send.send(Signal::Return(res)){
-                    break
+                if let Err(e) = chan.send.send(Signal::Return(res)) {
+                    break;
                 }
             }
         });
@@ -159,11 +163,11 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
     }
 }
 
-impl<T: Bound<R>, R:Ret> Drop for Pool<T, R>{
+impl<T: Bound<R>, R: Ret> Drop for Pool<T, R> {
     fn drop(&mut self) {
         let mut kill_list = vec![];
         kill_list.extend(self.waits.iter());
         kill_list.extend(self.running.iter());
-        kill_list.iter().for_each(|i|{self.kill_thread(*i)})
+        kill_list.iter().for_each(|i| { self.kill_thread(*i) })
     }
 }
