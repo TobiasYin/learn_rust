@@ -50,6 +50,7 @@ unsafe impl<T: Bound<R>, R: Ret> Send for ptr<T, R> {}
 
 pub struct Pool<T: Bound<R>, R: Ret> {
     pool_size: usize,
+    max_pool_size: usize, // TODO
     now_size: AtomicUsize,
     top_id: AtomicUsize,
     channels: HashMap<usize, Chan<T, R>>,
@@ -60,8 +61,10 @@ pub struct Pool<T: Bound<R>, R: Ret> {
 
 impl<T: Bound<R>, R: Ret> Pool<T, R> {
     pub fn new(size: usize) -> Self {
+        let (s, r) = channel();
         let mut s = Pool {
             pool_size: size,
+            max_pool_size: size * 3,
             now_size: Default::default(),
             top_id: Default::default(),
             channels: Default::default(),
@@ -70,10 +73,12 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
             mutex: None,
         };
         s.mutex = Some(Arc::new(Mutex::new(ptr(&mut s as *mut Self))));
+
         for i in 0..size {
             s.new_thread(i);
             s.waits.push_back(i)
         }
+        s.top_id.store(size, Ordering::SeqCst);
         s
     }
 
@@ -84,8 +89,9 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
         }
     }
 
-    pub fn add_job(&mut self, job: T) -> usize {
+    pub fn add_job(&mut self, job: T) -> usize  {
         let id = self.poll_thread();
+        println!("new job, thread: {}", id);
         self.running.insert(id);
 
         let chan = &self.channels[&id];
@@ -119,6 +125,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
     }
 
     fn kill_thread(&mut self, id: usize) {
+        println!("kill: {}", id);
         let c = &self.channels[&id];
         c.send.send(Signal::Quit).unwrap();
         self.now_size.fetch_sub(1, Ordering::SeqCst);
