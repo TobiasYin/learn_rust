@@ -13,6 +13,8 @@ use std::{
 };
 use std::sync::{Mutex, Arc};
 use std::error::Error;
+use std::thread::sleep;
+use std::time::Duration;
 
 pub trait Ret: Send + 'static {}
 
@@ -50,13 +52,15 @@ unsafe impl<T: Bound<R>, R: Ret> Send for Ptr<T, R> {}
 #[allow(dead_code)]
 pub struct Pool<T: Bound<R>, R: Ret> {
     pool_size: usize,
-    max_pool_size: usize, // TODO
+    max_pool_size: usize,
+    // TODO
     now_size: AtomicUsize,
     top_id: AtomicUsize,
     channels: HashMap<usize, Chan<T, R>>,
     running: HashSet<usize>,
     waits: VecDeque<usize>,
     mutex: Option<Arc<Mutex<Ptr<T, R>>>>,
+    has_wait: Mutex<bool>,
 }
 
 impl<T: Bound<R>, R: Ret> Pool<T, R> {
@@ -70,6 +74,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
             running: Default::default(),
             waits: Default::default(),
             mutex: None,
+            has_wait: Mutex::new(false),
         };
         s.mutex = Some(Arc::new(Mutex::new(Ptr(&mut s as *mut Self))));
 
@@ -89,7 +94,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
     }
 
     #[allow(unused_must_use)]
-    pub fn add_job(&mut self, job: T) -> usize  {
+    pub fn add_job(&mut self, job: T) -> usize {
         let id = self.poll_thread();
         println!("new job, thread: {}", id);
         self.running.insert(id);
@@ -119,8 +124,10 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
     fn return_thread(&mut self, id: usize) {
         self.running.remove(&id);
         if self.now_size.load(Ordering::SeqCst) > self.pool_size {
-            self.kill_thread(id);
-            return;
+            if !*self.has_wait.lock().unwrap() {
+                self.kill_thread(id);
+                return;
+            }
         }
         self.waits.push_back(id);
     }
@@ -163,11 +170,23 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
     }
 
     fn poll_thread(&mut self) -> usize {
-        self.waits.pop_back().unwrap_or_else(|| {
-            let id = self.top_id.fetch_add(1, Ordering::SeqCst);
-            self.new_thread(id);
-            id
-        })
+        loop {
+            let res = match self.waits.pop_back() {
+                Some(v) => v,
+                None => {
+                    if self.now_size.load(Ordering::SeqCst) > self.max_pool_size {
+                        *self.has_wait.lock().unwrap() = true;
+                        sleep(Duration::from_millis(5));
+                        continue;
+                    }
+                    let id = self.top_id.fetch_add(1, Ordering::SeqCst);
+                    self.new_thread(id);
+                    id
+                }
+            };
+            *self.has_wait.lock().unwrap() = false;
+            return res
+        }
     }
 }
 

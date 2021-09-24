@@ -2,8 +2,6 @@
 extern crate lazy_static;
 
 use http::*;
-use std::thread::sleep;
-use std::time::Duration;
 
 mod http;
 
