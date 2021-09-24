@@ -158,3 +158,12 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
         })
     }
 }
+
+impl<T: Bound<R>, R:Ret> Drop for Pool<T, R>{
+    fn drop(&mut self) {
+        let mut kill_list = vec![];
+        kill_list.extend(self.waits.iter());
+        kill_list.extend(self.running.iter());
+        kill_list.iter().for_each(|i|{self.kill_thread(*i)})
+    }
+}
