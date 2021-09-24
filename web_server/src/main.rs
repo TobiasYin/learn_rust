@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
-mod buf_reader;
-mod http;
-
 use http::*;
+
+mod http;
 
 handler!{
     MyHandler {

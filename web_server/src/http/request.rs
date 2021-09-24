@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use crate::http::result::Res;
-use crate::buf_reader::BufferReader;
+use crate::http::buf_reader::BufferReader;
 use std::time::Duration;
 
 
