@@ -30,6 +30,10 @@ impl<'a, T: Read> BufferReader<'a, T> {
         }
     }
 
+    pub fn set_truck_size(&mut self, size: usize) {
+        self.truck_size = size;
+    }
+
     fn inner_read(&mut self) -> io::Result<()> {
         let size = self.reader.read(&mut self.truck_buf)?;
         self.buf.extend_from_slice(&self.truck_buf[0..size]);
@@ -47,10 +51,10 @@ impl<'a, T: Read> BufferReader<'a, T> {
 
     fn next_byte(&mut self) -> io::Result<u8> {
         if self.buf.len() <= self.pos {
-            self.inner_read()?;
+            self.inner_read_with_size(self.truck_size)?;
         }
-        if self.buf.len() <= self.pos{
-            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "EOF"))
+        if self.buf.len() <= self.pos {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "EOF"));
         }
         let c = self.buf[self.pos];
         self.pos += 1;

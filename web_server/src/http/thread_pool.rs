@@ -2,6 +2,7 @@ use std::{
     sync::{
         mpsc::{channel, Receiver, Sender},
         atomic::{AtomicUsize},
+        {Mutex, Arc}
     },
     collections::{
         hash_set::HashSet,
@@ -9,12 +10,14 @@ use std::{
         vec_deque::VecDeque,
     },
     sync::atomic::Ordering,
-    thread,
+    thread::{
+        self,
+        sleep
+    },
+    time::Duration,
+    error::Error
 };
-use std::sync::{Mutex, Arc};
-use std::error::Error;
-use std::thread::sleep;
-use std::time::Duration;
+use crate::http::Res;
 
 pub trait Ret: Send + 'static {}
 
@@ -61,10 +64,12 @@ pub struct Pool<T: Bound<R>, R: Ret> {
     waits: VecDeque<usize>,
     mutex: Option<Arc<Mutex<Ptr<T, R>>>>,
     has_wait: Mutex<bool>,
+    send: Sender<T>
 }
 
 impl<T: Bound<R>, R: Ret> Pool<T, R> {
     pub fn new(size: usize) -> Self {
+        let (send, recv) = channel();
         let mut s = Pool {
             pool_size: size,
             max_pool_size: size * 3,
@@ -75,8 +80,19 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
             waits: Default::default(),
             mutex: None,
             has_wait: Mutex::new(false),
+            send
         };
         s.mutex = Some(Arc::new(Mutex::new(Ptr(&mut s as *mut Self))));
+
+        let this = s.mutex.as_ref().unwrap().clone();
+
+        thread::spawn(move ||{
+            for job in recv.iter(){
+                Self::borrow_ref_from_arc(&this, |s|{
+                    s.add_job_inner(job);
+                })
+            }
+        });
 
         for i in 0..size {
             s.new_thread(i);
@@ -94,7 +110,7 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
     }
 
     #[allow(unused_must_use)]
-    pub fn add_job(&mut self, job: T) -> usize {
+    fn add_job_inner(&mut self, job: T) -> usize {
         let id = self.poll_thread();
         println!("new job, thread: {}", id);
         self.running.insert(id);
@@ -108,8 +124,13 @@ impl<T: Bound<R>, R: Ret> Pool<T, R> {
         id
     }
 
+    pub fn add_job(&mut self, job: T) -> Res<()>{
+        self.send.send(job)?;
+        Ok(())
+    }
+
     #[allow(dead_code)]
-    pub fn wait_res(&mut self, id: usize) -> Result<R, Box<dyn Error>> {
+    fn wait_res(&mut self, id: usize) -> Result<R, Box<dyn Error>> {
         if !self.running.contains(&id) {
             Err("not found".into())
         } else {

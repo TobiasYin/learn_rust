@@ -109,6 +109,7 @@ pub fn read_request(conn: &mut TcpStream) -> Res<Request> {
     unsafe {
         (*pointer).set_read_timeout(None)?;
     }
+    buf_reader.set_truck_size(10);
 
 
     let first_line = buf_reader.read_line()?;
@@ -117,6 +118,7 @@ pub fn read_request(conn: &mut TcpStream) -> Res<Request> {
     unsafe {
         (*pointer).set_read_timeout(Some(Duration::from_secs(10)))?;
     }
+    buf_reader.set_truck_size(1024);
 
     let items: Vec<&str> = first_line.split(" ").collect();
     if items.len() != 3 {

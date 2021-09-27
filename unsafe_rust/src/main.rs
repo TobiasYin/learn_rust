@@ -50,13 +50,13 @@ impl <T: ToString> OutlinePrint for T{}
 
 struct Wrapper<T: Display>(Vec<T>);
 
-impl<T> fmt::Display for Wrapper<T> {
+impl<T: Display> fmt::Display for Wrapper<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[{}]", self.0.join(", "))
+        write!(f, "[{}]", self.0.iter().map(|i| i.to_string()).reduce(|i, j| {format!("{}, {}", i, j)}).unwrap_or(String::new()))
     }
 }
 
-impl<T> Deref for Wrapper<T>{
+impl<T: Display> Deref for Wrapper<T>{
     type Target = Vec<T>;
 
     fn deref(&self) -> &Self::Target {
