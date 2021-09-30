@@ -89,15 +89,15 @@ fn write_response(conn: &mut TcpStream, resp: &Response) -> Res<()> {
         format!("{}\r\n{}", o, n)
     });
     // write status
-    conn.write(status_line.as_bytes())?;
+    conn.write_all(status_line.as_bytes())?;
     // write header
     if let Some(h) = header {
-        conn.write("\r\n".as_bytes())?;
-        conn.write(h.as_bytes())?;
+        conn.write_all("\r\n".as_bytes())?;
+        conn.write_all(h.as_bytes())?;
     }
-    conn.write("\r\n\r\n".as_bytes())?;
+    conn.write_all("\r\n\r\n".as_bytes())?;
     //write body
-    conn.write(&resp.body)?;
+    conn.write_all(&resp.body)?;
 
     Ok(())
 }
