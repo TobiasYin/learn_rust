@@ -1,8 +1,10 @@
 use rand::Rng;
 use std::{thread, time};
-use futures::join;
+use futures::executor::block_on;
+use futures::{join};
 
-async fn download_async(_url: &str){
+async fn download_async(url: &str) {
+    println!("start task: {}", url);
     let sleep: u64 = rand::thread_rng().gen_range(100..3000);
     thread::sleep(time::Duration::from_millis(sleep));
 }
@@ -23,6 +25,8 @@ fn main() {
     let a = async {
         Ok(1)
     };
+    block_on(res);
+    let r: Result<i32, &str> = block_on(a);
+    println!("{:?}", r)
     // let res = join!(res, a);
-
 }
